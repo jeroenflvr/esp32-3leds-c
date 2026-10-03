@@ -1,5 +1,10 @@
 .PHONY: load-sdk build flash monitor clean fullclean menuconfig erase-flash reconfigure upload-spiffs create-env
 
+SHELL := /bin/zsh
+PORT ?= /dev/cu.usbmodem101
+# Ensure the ESP-IDF environment is loaded before any idf.py call
+IDF = command -v idf.py >/dev/null || source ~/esp/esp-idf/export.sh >/dev/null 2>&1; idf.py
+
 load-sdk:
 	@echo "Loading SDK..."
 	# Add commands to load the SDK here
@@ -8,48 +13,48 @@ load-sdk:
 
 build: 
 	@echo "Building project..."
-	idf.py build
+	$(IDF) build
 
 flash: upload-spiffs
 	@echo "Flashing project to device..."
-	idf.py flash
+	$(IDF) -p $(PORT) flash
 
 monitor:
 	@echo "Starting monitor..."
-	idf.py monitor
+	$(IDF) -p $(PORT) monitor
 
 flash-monitor: upload-spiffs flash
 	@echo "Flashing and monitoring..."
-	idf.py monitor
+	$(IDF) -p $(PORT) monitor
 
 clean:
 	@echo "Cleaning build artifacts..."
-	idf.py clean
+	$(IDF) clean
 
 fullclean:
 	@echo "Performing full clean (removes build directory)..."
-	idf.py fullclean
+	$(IDF) fullclean
 
 reconfigure:
 	@echo "Reconfiguring project..."
-	idf.py reconfigure
+	$(IDF) reconfigure
 
 menuconfig:
 	@echo "Opening configuration menu..."
-	idf.py menuconfig
+	$(IDF) menuconfig
 
 erase-flash:
 	@echo "Erasing flash memory..."
-	idf.py erase-flash
+	$(IDF) -p $(PORT) erase-flash
 
 # Utility targets
 size:
 	@echo "Analyzing binary size..."
-	idf.py size
+	$(IDF) size
 
 app-flash:
 	@echo "Flashing only the app (faster)..."
-	idf.py app-flash
+	$(IDF) -p $(PORT) app-flash
 
 # Combined workflow targets
 rebuild: clean build
@@ -66,7 +71,7 @@ upload-spiffs:
 		exit 1; \
 	fi
 	/Users/jeroen/.espressif/python_env/idf5.1_py3.12_env/bin/python /Users/jeroen/esp/esp-idf/components/spiffs/spiffsgen.py 0x10000 data build/spiffs.bin
-	/Users/jeroen/.espressif/python_env/idf5.1_py3.12_env/bin/python /Users/jeroen/esp/esp-idf/components/esptool_py/esptool/esptool.py --chip esp32c6 --port /dev/cu.usbmodem101 write_flash 0x190000 build/spiffs.bin
+	/Users/jeroen/.espressif/python_env/idf5.1_py3.12_env/bin/python /Users/jeroen/esp/esp-idf/components/esptool_py/esptool/esptool.py --chip esp32c6 --port $(PORT) write_flash 0x190000 build/spiffs.bin
 
 create-env:
 	@echo "Creating .env file from template..."

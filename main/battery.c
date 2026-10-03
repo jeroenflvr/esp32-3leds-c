@@ -15,7 +15,7 @@ static const char *TAG = "battery";
 #define BATTERY_ADC_SAMPLES  8
 #define BATTERY_ADC_DISCARD  2
 #define VOLTAGE_DIVIDER      2.0  /* R1=R2=330k, so Vbat = 2 * Vadc */
-#define ADC_CALIBRATION_FACTOR 1.238  /* Measured 1990mV, ADC read 1608mV */
+#define ADC_CALIBRATION_FACTOR 1.051  /* Multimeter 4.10V, firmware read 4.83V with factor 1.238 */
 #define CACHE_VALID_US       (10 * 1000 * 1000)  /* 10 s */
 
 static adc_oneshot_unit_handle_t adc_handle = NULL;

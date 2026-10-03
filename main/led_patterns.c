@@ -181,13 +181,14 @@ static void render_heartbeat(const led_state_t *s)
         heartbeat_t_ms -= period_ms;
     }
 
-    /* compress the lub-dub if the period gets short */
-    const float squeeze = period_ms < 600 ? period_ms / 600.0f : 1.0f;
+    /* whole lub-dub cycle scales with the period: at low bpm the pulses
+     * ramp up/down slower and sit further apart, like a real heart */
+    const float scale = period_ms / 1000.0f;   /* 1.0 at 60 bpm */
     const float t = (float)heartbeat_t_ms;
 
     /* lub (strong) then dub (weaker), like S1/S2 heart sounds */
-    float env = gauss(t, 80.0f * squeeze, 45.0f * squeeze)
-              + 0.55f * gauss(t, 320.0f * squeeze, 55.0f * squeeze)
+    float env = gauss(t, 100.0f * scale, 60.0f * scale)
+              + 0.55f * gauss(t, 350.0f * scale, 70.0f * scale)
               + 0.03f;
     if (env > 1.0f) env = 1.0f;
     env = env * env;  /* gamma for a punchier pulse */
