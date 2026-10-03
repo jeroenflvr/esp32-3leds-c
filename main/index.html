@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>LED Control</title>
+    <meta name='viewport' content='width=device-width,initial-scale=1'>
+    <style>
+        body {
+            font-family: -apple-system, Arial, sans-serif;
+            max-width: 480px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #14161a;
+            color: #e8e8e8;
+        }
+        h1 { text-align: center; font-size: 1.4em; margin: 10px 0 4px; }
+        #battery { text-align: center; color: #9aa; font-size: 0.9em; margin-bottom: 20px; }
+        .card {
+            background: #1e2128;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+        .patterns {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        .patterns button {
+            padding: 16px 8px;
+            font-size: 1em;
+            border: 2px solid #333a46;
+            border-radius: 10px;
+            background: #262a33;
+            color: #e8e8e8;
+            cursor: pointer;
+        }
+        .patterns button.active {
+            border-color: #4a9eff;
+            background: #2a3a52;
+        }
+        label { display: block; margin: 12px 0 6px; color: #aab; font-size: 0.9em; }
+        input[type=range] { width: 100%; accent-color: #4a9eff; }
+        input[type=color] {
+            width: 100%;
+            height: 48px;
+            border: none;
+            border-radius: 8px;
+            background: none;
+            cursor: pointer;
+        }
+        .value { float: right; color: #e8e8e8; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <h1>&#128161; LED Control</h1>
+    <div id='battery'>&#128267; --</div>
+
+    <div class='card patterns'>
+        <button data-pattern='off'>&#9898; Off</button>
+        <button data-pattern='solid'>&#127912; Solid Color</button>
+        <button data-pattern='candle'>&#128367;&#65039; Candle</button>
+        <button data-pattern='lightning'>&#9889; Lightning</button>
+        <button data-pattern='heartbeat' style='grid-column:1/-1'>&#10084;&#65039; Heartbeat</button>
+    </div>
+
+    <div class='card'>
+        <label>Brightness <span class='value' id='brightness-val'></span></label>
+        <input type='range' id='brightness' min='1' max='255'>
+    </div>
+
+    <div class='card hidden' id='color-card'>
+        <label>Color</label>
+        <input type='color' id='color'>
+    </div>
+
+    <div class='card hidden' id='bpm-card'>
+        <label>Heart rate <span class='value'><span id='bpm-val'></span> bpm</span></label>
+        <input type='range' id='bpm' min='30' max='180'>
+    </div>
+
+<script>
+let state = { pattern: 'off', brightness: 128, r: 255, g: 40, b: 40, bpm: 60 };
+let sendTimer = null;
+
+function hex(n) { return n.toString(16).padStart(2, '0'); }
+
+function render() {
+    document.querySelectorAll('.patterns button').forEach(b =>
+        b.classList.toggle('active', b.dataset.pattern === state.pattern));
+    document.getElementById('brightness').value = state.brightness;
+    document.getElementById('brightness-val').textContent =
+        Math.round(state.brightness / 255 * 100) + '%';
+    document.getElementById('color').value = '#' + hex(state.r) + hex(state.g) + hex(state.b);
+    document.getElementById('bpm').value = state.bpm;
+    document.getElementById('bpm-val').textContent = state.bpm;
+    document.getElementById('color-card').classList.toggle('hidden',
+        state.pattern !== 'solid' && state.pattern !== 'heartbeat');
+    document.getElementById('bpm-card').classList.toggle('hidden',
+        state.pattern !== 'heartbeat');
+}
+
+function send() {
+    clearTimeout(sendTimer);
+    sendTimer = setTimeout(() => {
+        fetch('/api/state', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(state)
+        }).catch(() => {});
+    }, 80);
+}
+
+document.querySelectorAll('.patterns button').forEach(b =>
+    b.addEventListener('click', () => {
+        state.pattern = b.dataset.pattern;
+        render(); send();
+    }));
+
+document.getElementById('brightness').addEventListener('input', e => {
+    state.brightness = +e.target.value;
+    render(); send();
+});
+
+document.getElementById('color').addEventListener('input', e => {
+    state.r = parseInt(e.target.value.substr(1, 2), 16);
+    state.g = parseInt(e.target.value.substr(3, 2), 16);
+    state.b = parseInt(e.target.value.substr(5, 2), 16);
+    render(); send();
+});
+
+document.getElementById('bpm').addEventListener('input', e => {
+    state.bpm = +e.target.value;
+    render(); send();
+});
+
+function refreshBattery(s) {
+    if (s.battery_v !== undefined) {
+        document.getElementById('battery').innerHTML =
+            '&#128267; ' + s.battery_pct.toFixed(0) + '% (' + s.battery_v.toFixed(2) + ' V)';
+    }
+}
+
+fetch('/api/state').then(r => r.json()).then(s => {
+    state = { pattern: s.pattern, brightness: s.brightness, r: s.r, g: s.g, b: s.b, bpm: s.bpm };
+    refreshBattery(s);
+    render();
+});
+
+setInterval(() => {
+    fetch('/api/state').then(r => r.json()).then(refreshBattery).catch(() => {});
+}, 30000);
+</script>
+</body>
+</html>
