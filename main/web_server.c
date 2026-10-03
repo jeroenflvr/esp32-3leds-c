@@ -43,6 +43,16 @@ static esp_err_t state_get_handler(httpd_req_t *req)
     cJSON_AddNumberToObject(root, "g", s.g);
     cJSON_AddNumberToObject(root, "b", s.b);
     cJSON_AddNumberToObject(root, "bpm", s.bpm);
+    cJSON *orange = cJSON_CreateArray();
+    for (int i = 0; i < 3; i++) {
+        cJSON_AddItemToArray(orange, cJSON_CreateNumber(s.orange[i]));
+    }
+    cJSON_AddItemToObject(root, "orange", orange);
+    cJSON *nervous = cJSON_CreateArray();
+    for (int i = 0; i < 3; i++) {
+        cJSON_AddItemToArray(nervous, cJSON_CreateNumber(s.nervous[i]));
+    }
+    cJSON_AddItemToObject(root, "nervous", nervous);
     cJSON_AddNumberToObject(root, "battery_v", voltage);
     cJSON_AddNumberToObject(root, "battery_pct", percentage);
 
@@ -105,6 +115,18 @@ static esp_err_t state_post_handler(httpd_req_t *req)
     }
     if ((item = cJSON_GetObjectItem(root, "bpm")) && cJSON_IsNumber(item)) {
         s.bpm = (uint16_t)item->valuedouble;
+    }
+    if ((item = cJSON_GetObjectItem(root, "orange")) && cJSON_IsArray(item)) {
+        for (int i = 0; i < 3 && i < cJSON_GetArraySize(item); i++) {
+            const cJSON *v = cJSON_GetArrayItem(item, i);
+            if (cJSON_IsNumber(v)) s.orange[i] = clamp_u8(v->valuedouble);
+        }
+    }
+    if ((item = cJSON_GetObjectItem(root, "nervous")) && cJSON_IsArray(item)) {
+        for (int i = 0; i < 3 && i < cJSON_GetArraySize(item); i++) {
+            const cJSON *v = cJSON_GetArrayItem(item, i);
+            if (cJSON_IsNumber(v)) s.nervous[i] = clamp_u8(v->valuedouble);
+        }
     }
     cJSON_Delete(root);
 

@@ -29,6 +29,8 @@ static led_state_t current_state = {
     .brightness = 128,
     .r = 255, .g = 40, .b = 40,
     .bpm = 60,
+    .orange = {100, 100, 100},
+    .nervous = {40, 120, 200},   /* stable at the base, nervous at the tip */
 };
 
 static const char *pattern_names[PATTERN_MAX] = {
@@ -91,20 +93,26 @@ static void render_candle(const led_state_t *s)
 {
     for (int i = 0; i < LED_COUNT; i++) {
         candle_led_t *c = &candle[i];
+        const float n = s->nervous[i] / 255.0f;
         if (--c->hold_ticks <= 0) {
-            /* occasional deep dip makes the flame "dance" */
-            if (rand_float() < 0.15f) {
-                c->target = 0.15f + rand_float() * 0.25f;
+            /* nervous flames dip more often, deeper, and swing wider */
+            if (rand_float() < 0.05f + 0.20f * n) {
+                const float dip_min = 0.40f - 0.25f * n;
+                c->target = dip_min + rand_float() * 0.25f;
             } else {
-                c->target = 0.55f + rand_float() * 0.45f;
+                const float hi_min = 0.85f - 0.30f * n;
+                c->target = hi_min + rand_float() * (1.0f - hi_min);
             }
-            c->hold_ticks = rand_range(2, 12);
+            const int slow = (int)(18.0f * (1.0f - n));   /* calm flames hold longer */
+            c->hold_ticks = rand_range(2 + slow / 3, 12 + slow);
         }
-        c->level += (c->target - c->level) * 0.25f;
+        c->level += (c->target - c->level) * (0.10f + 0.25f * n);
 
-        /* warm flame; green drops faster than red when dim -> redder when low */
+        /* warm flame; green drops faster than red when dim -> redder when low.
+         * per-LED orangeness scales the green peak: 0 -> 170 (yellow), 255 -> 50 (deep orange) */
         const float lvl = c->level;
-        set_pixel(i, 255.0f * lvl, 140.0f * lvl * lvl, 12.0f * lvl * lvl, s->brightness);
+        const float g_peak = 170.0f - 120.0f * (s->orange[i] / 255.0f);
+        set_pixel(i, 255.0f * lvl, g_peak * lvl * lvl, 12.0f * lvl * lvl, s->brightness);
     }
 }
 
@@ -165,7 +173,8 @@ static void render_lightning(const led_state_t *s)
 
 /* ---------- heartbeat ---------- */
 
-static uint32_t heartbeat_t_ms = 0;
+static int64_t hb_last_us = 0;
+static float hb_phase = 0.0f;   /* 0..1 position in the beat cycle */
 
 static float gauss(float t, float center, float sigma)
 {
@@ -176,15 +185,17 @@ static float gauss(float t, float center, float sigma)
 static void render_heartbeat(const led_state_t *s)
 {
     const uint32_t period_ms = 60000 / (s->bpm ? s->bpm : 60);
-    heartbeat_t_ms += TICK_MS;
-    if (heartbeat_t_ms >= period_ms) {
-        heartbeat_t_ms -= period_ms;
-    }
 
-    /* whole lub-dub cycle scales with the period: at low bpm the pulses
-     * ramp up/down slower and sit further apart, like a real heart */
+    /* advance phase by real elapsed time so the beat stays locked to bpm,
+     * independent of task-loop jitter and render overhead */
+    const int64_t now = esp_timer_get_time();
+    if (hb_last_us == 0) hb_last_us = now;
+    hb_phase += ((now - hb_last_us) / 1000.0f) / (float)period_ms;
+    hb_last_us = now;
+    hb_phase -= floorf(hb_phase);
+
     const float scale = period_ms / 1000.0f;   /* 1.0 at 60 bpm */
-    const float t = (float)heartbeat_t_ms;
+    const float t = hb_phase * (float)period_ms;
 
     /* lub (strong) then dub (weaker), like S1/S2 heart sounds */
     float env = gauss(t, 100.0f * scale, 60.0f * scale)
@@ -232,6 +243,16 @@ static void save_timer_cb(void *arg)
     nvs_set_u8(nvs, "g", s.g);
     nvs_set_u8(nvs, "b", s.b);
     nvs_set_u16(nvs, "bpm", s.bpm);
+    char key[4] = "or0";
+    for (int i = 0; i < LED_COUNT; i++) {
+        key[2] = '0' + i;
+        nvs_set_u8(nvs, key, s.orange[i]);
+    }
+    char nkey[4] = "nv0";
+    for (int i = 0; i < LED_COUNT; i++) {
+        nkey[2] = '0' + i;
+        nvs_set_u8(nvs, nkey, s.nervous[i]);
+    }
     nvs_commit(nvs);
     nvs_close(nvs);
     ESP_LOGI(TAG, "LED state saved (pattern=%s)", led_pattern_name(s.pattern));
@@ -252,8 +273,18 @@ static void load_state(void)
     if (nvs_get_u8(nvs, "r", &u8) == ESP_OK) current_state.r = u8;
     if (nvs_get_u8(nvs, "g", &u8) == ESP_OK) current_state.g = u8;
     if (nvs_get_u8(nvs, "b", &u8) == ESP_OK) current_state.b = u8;
-    if (nvs_get_u16(nvs, "bpm", &u16) == ESP_OK && u16 >= 30 && u16 <= 180) {
+    if (nvs_get_u16(nvs, "bpm", &u16) == ESP_OK && u16 >= 10 && u16 <= 180) {
         current_state.bpm = u16;
+    }
+    char key[4] = "or0";
+    for (int i = 0; i < LED_COUNT; i++) {
+        key[2] = '0' + i;
+        if (nvs_get_u8(nvs, key, &u8) == ESP_OK) current_state.orange[i] = u8;
+    }
+    char nkey[4] = "nv0";
+    for (int i = 0; i < LED_COUNT; i++) {
+        nkey[2] = '0' + i;
+        if (nvs_get_u8(nvs, nkey, &u8) == ESP_OK) current_state.nervous[i] = u8;
     }
     nvs_close(nvs);
     ESP_LOGI(TAG, "LED state restored (pattern=%s, brightness=%d)",
@@ -323,7 +354,7 @@ void led_patterns_set(const led_state_t *state)
     xSemaphoreTake(state_mutex, portMAX_DELAY);
     current_state = *state;
     if (current_state.pattern >= PATTERN_MAX) current_state.pattern = PATTERN_OFF;
-    if (current_state.bpm < 30) current_state.bpm = 30;
+    if (current_state.bpm < 10) current_state.bpm = 10;
     if (current_state.bpm > 180) current_state.bpm = 180;
     xSemaphoreGive(state_mutex);
 

@@ -17,6 +17,8 @@ typedef struct {
     uint8_t brightness;   /* global brightness 0-255, applies to every pattern */
     uint8_t r, g, b;      /* color for SOLID and HEARTBEAT */
     uint16_t bpm;         /* heartbeat rate, 30-180 */
+    uint8_t orange[3];    /* per-LED candle orangeness 0-255 (0=yellow, 255=deep orange) */
+    uint8_t nervous[3];   /* per-LED candle nervousness 0-255 (0=steady, 255=jittery) */
 } led_state_t;
 
 /**
