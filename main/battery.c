@@ -11,7 +11,7 @@ static const char *TAG = "battery";
 
 /* Battery ADC Configuration */
 #define BATTERY_ADC_CHANNEL  ADC_CHANNEL_1  /* GPIO1 */
-#define BATTERY_ADC_ATTEN    ADC_ATTEN_DB_11
+#define BATTERY_ADC_ATTEN    ADC_ATTEN_DB_12
 #define BATTERY_ADC_SAMPLES  8
 #define BATTERY_ADC_DISCARD  2
 #define VOLTAGE_DIVIDER      2.0  /* R1=R2=330k, so Vbat = 2 * Vadc */

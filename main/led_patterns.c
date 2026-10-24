@@ -135,7 +135,7 @@ static void render_lightning(const led_state_t *s)
         switch (storm.phase) {
         case STORM_IDLE:
             storm.flashes_left = rand_range(1, 4);
-            /* fall through to first flash */
+            __attribute__((fallthrough));
         case STORM_FLASH_OFF:
             if (storm.flashes_left > 0) {
                 storm.flashes_left--;

@@ -3,13 +3,13 @@
 SHELL := /bin/zsh
 PORT ?= /dev/cu.usbmodem101
 # Ensure the ESP-IDF environment is loaded before any idf.py call
-IDF = command -v idf.py >/dev/null || source ~/esp/esp-idf/export.sh >/dev/null 2>&1; idf.py
+IDF_ACTIVATE ?= $(HOME)/.espressif/tools/activate_idf_v6.1.sh
+IDF = command -v idf.py >/dev/null || source $(IDF_ACTIVATE) >/dev/null 2>&1; idf.py
 
 load-sdk:
 	@echo "Loading SDK..."
 	# Add commands to load the SDK here
-	. /Users/jeroen/esp/esp-idf/export.sh
-	idf.py set-target esp32c6
+	$(IDF) set-target esp32c6
 
 build: 
 	@echo "Building project..."
@@ -70,8 +70,9 @@ upload-spiffs:
 		echo "Error: data/ directory not found. Create it and add your .env file."; \
 		exit 1; \
 	fi
-	/Users/jeroen/.espressif/python_env/idf5.1_py3.12_env/bin/python /Users/jeroen/esp/esp-idf/components/spiffs/spiffsgen.py 0x10000 data build/spiffs.bin
-	/Users/jeroen/.espressif/python_env/idf5.1_py3.12_env/bin/python /Users/jeroen/esp/esp-idf/components/esptool_py/esptool/esptool.py --chip esp32c6 --port $(PORT) write_flash 0x190000 build/spiffs.bin
+	@source $(IDF_ACTIVATE) >/dev/null 2>&1; \
+	python $$IDF_PATH/components/spiffs/spiffsgen.py 0x10000 data build/spiffs.bin && \
+	python -m esptool --chip esp32c6 --port $(PORT) write-flash 0x190000 build/spiffs.bin
 
 create-env:
 	@echo "Creating .env file from template..."
